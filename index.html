@@ -6,7 +6,7 @@
     <title>座標定位大師 - 學習 XY 座標</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
         body {
             font-family: 'Noto Sans TC', sans-serif;
             background-color: #f3f4f6;
@@ -76,6 +76,9 @@
                 <button id="nextBtn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors hidden text-base lg:text-lg">
                     下一題 ➔
                 </button>
+                <button id="finishBtn" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors hidden text-base lg:text-lg">
+                    結束遊戲 ➔
+                </button>
                 <button id="restartBtn" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors hidden text-base lg:text-lg">
                     🔄 重新開始遊戲
                 </button>
@@ -114,7 +117,7 @@
         let currentDifficulty = 'easy';
         let targetCoord = { x: 0, y: 0 };
         let startCoord = null; 
-        let state = 'init'; // 'init', 'playing', 'answered', 'gameover'
+        let state = 'init'; // 'init', 'playing', 'answered', 'gameover', 'gameover_wait'
         
         let hoverCoord = null; 
         let clickedCoord = null; 
@@ -122,6 +125,7 @@
         let highlightAxis = null; 
         let isRotationQuestion = false; 
         let currentQuestionType = 'exact'; // 紀錄當前題目類型 ('exact' 或 'quadrant')
+        let gameOverReason = ''; // 紀錄遊戲結束原因，用於停頓後呼叫
         
         // 挑戰模式狀態
         let currentChallenge = null;
@@ -247,6 +251,7 @@
         const questionTextEl = document.getElementById('questionText');
         const feedbackAreaEl = document.getElementById('feedbackArea');
         const nextBtnEl = document.getElementById('nextBtn');
+        const finishBtnEl = document.getElementById('finishBtn');
         const restartBtnEl = document.getElementById('restartBtn');
         const startMainBtnEl = document.getElementById('startMainBtn');
         const scoreDisplayEl = document.getElementById('scoreDisplay');
@@ -404,7 +409,7 @@
             drawGrid();
 
             // --- 象限題的正確象限區域高亮 ---
-            if (currentQuestionType === 'quadrant' && (state === 'answered' || state === 'gameover')) {
+            if (currentQuestionType === 'quadrant' && (state === 'answered' || state === 'gameover' || state === 'gameover_wait')) {
                 let xStart = targetCoord.x > 0 ? 0 : GRID_MIN;
                 let xEnd = targetCoord.x > 0 ? GRID_MAX : 0;
                 let yStart = targetCoord.y > 0 ? 0 : GRID_MIN;
@@ -446,7 +451,7 @@
                     ctx.lineTo(p.x, p.y);
                 }
                 // 若挑戰完成，將圖案閉合 (最後一點連回第一點)
-                if (state === 'gameover' && challengeStep === currentChallenge.steps.length - 1 && score > 0) {
+                if ((state === 'gameover' || state === 'gameover_wait') && challengeStep === currentChallenge.steps.length - 1 && score > 0) {
                      ctx.lineTo(startP.x, startP.y);
                 }
                 ctx.stroke();
@@ -470,7 +475,7 @@
             }
 
             // --- 旋轉題目的終點紅色虛線長方形 ---
-            if (isRotationQuestion && (state === 'answered' || state === 'gameover')) {
+            if (isRotationQuestion && (state === 'answered' || state === 'gameover' || state === 'gameover_wait')) {
                 let pOrigin = g2p(0, 0);
                 let pTarget = g2p(targetCoord.x, targetCoord.y);
                 ctx.beginPath();
@@ -516,7 +521,31 @@
                 }
             }
 
-            if (state === 'gameover') {
+            // 顯示正確位置座標數字 (答對時，或生命值耗盡時)
+            if ((state === 'answered' || state === 'gameover' || state === 'gameover_wait') && currentQuestionType !== 'quadrant') {
+                const pTarget = g2p(targetCoord.x, targetCoord.y);
+                
+                // 更大更大的字體
+                ctx.font = '900 76px "Noto Sans TC", sans-serif'; 
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                
+                // 加入白色外框使其在背景上更清楚 (先畫外框，再填滿字體)
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.strokeText(`(${targetCoord.x}, ${targetCoord.y})`, pTarget.x, pTarget.y - 60);
+                
+                // 答對或完成時顯示深綠色，耗盡生命(失敗)顯示紅色
+                if (state === 'answered' || (state === 'gameover_wait' && gameOverReason === '成功完成圖案！')) {
+                    ctx.fillStyle = '#047857'; // 深綠色
+                } else {
+                    ctx.fillStyle = '#dc2626'; // 紅色
+                }
+                
+                ctx.fillText(`(${targetCoord.x}, ${targetCoord.y})`, pTarget.x, pTarget.y - 60);
+            }
+
+            if (state === 'gameover' || state === 'gameover_wait') {
                 if (clickedCoord && (clickedCoord.x !== targetCoord.x || clickedCoord.y !== targetCoord.y)) {
                     drawPoint(targetCoord.x, targetCoord.y, '#10b981', 12, '正確位置'); 
                     const pClick = g2p(clickedCoord.x, clickedCoord.y);
@@ -562,6 +591,7 @@
             document.getElementById('difficultySelector').classList.add('opacity-50', 'pointer-events-none');
             restartBtnEl.classList.add('hidden');
             startMainBtnEl.classList.add('hidden');
+            finishBtnEl.classList.add('hidden');
             
             // 初始化挑戰模式
             collectedTreasures = [];
@@ -595,7 +625,8 @@
                                         <span class="text-2xl font-bold mt-2 block">最終得分：${score}</span>`;
             feedbackAreaEl.classList.add('hidden');
             nextBtnEl.classList.add('hidden');
-            restartBtnEl.classList.remove('hidden');
+            finishBtnEl.classList.add('hidden'); // 確保按下結束遊戲後，結束按鈕會消失
+            restartBtnEl.classList.remove('hidden'); // 顯示重新開始按鈕
             render();
         }
 
@@ -650,14 +681,14 @@
                         if (tx >= -10 && tx <= 10 && ty >= -10 && ty <= 10) {
                             targetCoord = { x: tx, y: ty };
                             let moveStr = "";
-                            if (dx > 0) moveStr = `向右平移 <span class="font-bold text-blue-600">${dx}</span> 單位`;
-                            if (dx < 0) moveStr = `向左平移 <span class="font-bold text-blue-600">${-dx}</span> 單位`;
-                            if (dy > 0) moveStr = `向上平移 <span class="font-bold text-blue-600">${dy}</span> 單位`;
-                            if (dy < 0) moveStr = `向下平移 <span class="font-bold text-blue-600">${-dy}</span> 單位`;
+                            if (dx > 0) moveStr = `向右平移 ${dx} 單位`;
+                            if (dx < 0) moveStr = `向左平移 ${-dx} 單位`;
+                            if (dy > 0) moveStr = `向上平移 ${dy} 單位`;
+                            if (dy < 0) moveStr = `向下平移 ${-dy} 單位`;
 
-                            qText = `從起點 <b>(${sx}, ${sy})</b> 開始：<br><br>
-                                     請執行操作：${moveStr}。<br><br>
-                                     <span class="text-blue-600 font-bold">請點擊最終的座標位置。</span>`;
+                            qText = `從起點 <span class="text-4xl font-black">(${sx}, ${sy})</span> 開始：<br><br>
+                                     <span class="text-3xl text-purple-600 font-bold block my-2">${moveStr}</span>
+                                     <span class="text-blue-600 font-bold mt-2 inline-block">請點擊最終的座標位置。</span>`;
                             valid = true;
                         }
                     } 
@@ -667,15 +698,15 @@
                         if (reflectType === 'x') {
                             if (sy === 0) sy = rand(1, 8) * (Math.random() < 0.5 ? 1 : -1);
                             startCoord = { x: sx, y: sy }; targetCoord = { x: sx, y: -sy };
-                            qText = `已知起點為 <b>(${sx}, ${sy})</b>：<br><br>
-                                     請將該點<span class="font-bold text-orange-600">以 X 軸為對稱軸進行反射</span>。<br><br>
-                                     <span class="text-blue-600 font-bold">請點擊變換後的座標位置。</span>`;
+                            qText = `已知起點為 <span class="text-4xl font-black">(${sx}, ${sy})</span>：<br><br>
+                                     <span class="text-3xl text-purple-600 font-bold block my-2">以 X 軸為對稱軸進行反射</span>
+                                     <span class="text-blue-600 font-bold mt-2 inline-block">請點擊變換後的座標位置。</span>`;
                         } else {
                             if (sx === 0) sx = rand(1, 8) * (Math.random() < 0.5 ? 1 : -1);
                             startCoord = { x: sx, y: sy }; targetCoord = { x: -sx, y: sy };
-                            qText = `已知起點為 <b>(${sx}, ${sy})</b>：<br><br>
-                                     請將該點<span class="font-bold text-orange-600">以 Y 軸為對稱軸進行反射</span>。<br><br>
-                                     <span class="text-blue-600 font-bold">請點擊變換後的座標位置。</span>`;
+                            qText = `已知起點為 <span class="text-4xl font-black">(${sx}, ${sy})</span>：<br><br>
+                                     <span class="text-3xl text-purple-600 font-bold block my-2">以 Y 軸為對稱軸進行反射</span>
+                                     <span class="text-blue-600 font-bold mt-2 inline-block">請點擊變換後的座標位置。</span>`;
                         }
                         valid = true;
                     } 
@@ -689,9 +720,9 @@
                         ];
                         let rot = rotations[rand(0, rotations.length - 1)];
                         targetCoord = rot.op(sx, sy);
-                        qText = `已知起點為 <b>(${sx}, ${sy})</b>：<br><br>
-                                 請將該點<span class="font-bold text-purple-600">${rot.name}</span>。<br><br>
-                                 <span class="text-blue-600 font-bold">請點擊旋轉後的座標位置。</span>`;
+                        qText = `已知起點為 <span class="text-4xl font-black">(${sx}, ${sy})</span>：<br><br>
+                                 <span class="text-3xl text-purple-600 font-bold block my-2">${rot.name}</span>
+                                 <span class="text-blue-600 font-bold mt-2 inline-block">請點擊旋轉後的座標位置。</span>`;
                         valid = true;
                     }
                 } 
@@ -709,9 +740,9 @@
                     qText = `<div class="mb-3 inline-block bg-purple-100 text-purple-800 px-4 py-1 rounded-full text-sm font-bold border border-purple-300 shadow-sm">
                                 任務進度：${challengeStep + 1} / ${currentChallenge.steps.length}
                              </div><br>
-                             從目前位置 <b>(${startCoord.x}, ${startCoord.y})</b> 繼續：<br><br>
-                             請將該點<span class="font-bold text-purple-600">${step.text}</span>。<br><br>
-                             <span class="text-blue-600 font-bold">請點擊變換後的新座標位置。</span>`;
+                             從目前位置 <span class="text-4xl font-black">(${startCoord.x}, ${startCoord.y})</span> 繼續：<br><br>
+                             <span class="text-3xl text-purple-600 font-bold block my-2">${step.text}</span>
+                             <span class="text-blue-600 font-bold mt-2 inline-block">請點擊變換後的新座標位置。</span>`;
                     valid = true;
                 }
             }
@@ -769,7 +800,9 @@
                         scoreDisplayEl.innerText = score;
                         feedbackAreaEl.innerHTML = `🌟 太棒了！你收集完所有寶藏，完成了「${currentChallenge.name}」圖案！<br><span class="text-sm font-normal">(獲得 +50 額外完成獎勵)</span>`;
                         feedbackAreaEl.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg transition-all duration-300 bg-yellow-100 text-yellow-800 border border-yellow-400 shadow-md";
-                        setTimeout(() => endGame('成功完成圖案！'), 3000); // 延遲讓玩家欣賞圖案
+                        state = 'gameover_wait';
+                        gameOverReason = '成功完成圖案！';
+                        finishBtnEl.classList.remove('hidden');
                     }
                 } else {
                     if (currentQuestionType === 'quadrant') {
@@ -790,20 +823,21 @@
                 if (currentQuestionType === 'quadrant') {
                     const quadInfo = getQuadrantInfo(targetCoord.x, targetCoord.y);
                     if (gx === 0 || gy === 0) {
-                        wrongHint = `座標軸不屬於任何象限喔！正確答案是${quadInfo.zh} (${quadInfo.en})。`;
+                        wrongHint = `座標軸不屬於任何象限喔！<br>正確答案是 <span class="text-3xl font-black text-red-700 block mt-1">${quadInfo.zh} (${quadInfo.en})</span>。`;
                     } else {
-                        wrongHint = `該點位於另一象限！正確答案是${quadInfo.zh} (${quadInfo.en})。`;
+                        wrongHint = `該點位於另一象限！<br>正確答案是 <span class="text-3xl font-black text-red-700 block mt-1">${quadInfo.zh} (${quadInfo.en})</span>。`;
                     }
                 } else {
-                    wrongHint = `你點擊了 (${gx}, ${gy})，正確答案是 (${targetCoord.x}, ${targetCoord.y})`;
+                    wrongHint = `你點擊了 (${gx}, ${gy})<br>正確答案是 <span class="text-3xl font-black text-red-700 block mt-1">(${targetCoord.x}, ${targetCoord.y})</span>`;
                 }
                 
                 if (lives <= 0) {
-                    state = 'gameover'; 
+                    state = 'gameover_wait'; 
                     clickedCoord = { x: gx, y: gy }; 
-                    feedbackAreaEl.innerHTML = `🪨 哎呀，挖到石頭了！<br><span class="text-sm font-normal">${wrongHint}</span>`;
+                    feedbackAreaEl.innerHTML = `🪨 生命值耗盡！<br><span class="text-lg mt-2 block leading-relaxed">${wrongHint}</span>`;
                     feedbackAreaEl.className = "mt-4 p-4 rounded-lg text-center font-bold text-lg transition-all duration-300 bg-red-100 text-red-800 border border-red-300";
-                    setTimeout(() => endGame('生命值耗盡！'), 1500); 
+                    gameOverReason = '生命值耗盡！';
+                    finishBtnEl.classList.remove('hidden');
                 } else {
                     let retryText = currentQuestionType === 'quadrant' ? `這不是正確的象限，請再試一次！` : `(${gx}, ${gy}) 不是正確位置，請再試一次！`;
                     feedbackAreaEl.innerHTML = `🪨 哎呀，挖到石頭了！<br><span class="text-sm font-normal">${retryText}</span>`;
@@ -846,6 +880,9 @@
         
         restartBtnEl.addEventListener('click', startNewGame);
         startMainBtnEl.addEventListener('click', startNewGame);
+        finishBtnEl.addEventListener('click', () => {
+            endGame(gameOverReason);
+        });
 
         canvas.addEventListener('mousemove', (e) => {
             if (state !== 'playing') return;
@@ -891,4 +928,3 @@
     </script>
 </body>
 </html>
-
