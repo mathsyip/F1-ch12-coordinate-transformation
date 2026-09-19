@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -339,12 +340,33 @@
                 let px = g2p(i, 0); ctx.fillText(i.toString(), px.x, px.y + 24);
                 let py = g2p(0, i); ctx.fillText(i.toString(), py.x - 26, py.y);
             }
+            
             let origin = g2p(0,0);
             ctx.fillText('0', origin.x - 20, origin.y + 20);
-            ctx.font = 'bold 26px sans-serif';
+            
+            // 繪製 X 軸與 Y 軸正向箭頭
+            let pXEnd = g2p(GRID_MAX, 0);
+            let pYEnd = g2p(0, GRID_MAX);
+            
             ctx.fillStyle = 'black';
-            ctx.fillText('X', g2p(GRID_MAX, 0).x + 28, g2p(GRID_MAX, 0).y);
-            ctx.fillText('Y', g2p(0, GRID_MAX).x, g2p(0, GRID_MAX).y - 28);
+            // X 軸箭頭 (向右)
+            ctx.beginPath();
+            ctx.moveTo(pXEnd.x + 18, pXEnd.y);
+            ctx.lineTo(pXEnd.x, pXEnd.y - 8);
+            ctx.lineTo(pXEnd.x, pXEnd.y + 8);
+            ctx.fill();
+            
+            // Y 軸箭頭 (向上)
+            ctx.beginPath();
+            ctx.moveTo(pYEnd.x, pYEnd.y - 18);
+            ctx.lineTo(pYEnd.x - 8, pYEnd.y);
+            ctx.lineTo(pYEnd.x + 8, pYEnd.y);
+            ctx.fill();
+
+            // 標示細楷 (小寫斜體) x, y
+            ctx.font = 'italic bold 28px "Times New Roman", serif';
+            ctx.fillText('x', pXEnd.x + 36, pXEnd.y); 
+            ctx.fillText('y', pYEnd.x, pYEnd.y - 36);
         }
 
         function drawPoint(x, y, color, size = 10, label = null) {
@@ -870,3 +892,5 @@
     </script>
 </body>
 </html>
+
+```
